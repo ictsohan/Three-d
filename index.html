@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>প্রিন্ট মিটার ম্যানেজার (Fixed)</title>
+    
+    <!-- Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root { 
+            --primary: #2c3e50; 
+            --secondary: #3498db; 
+            --success: #27ae60; 
+            --warning: #f39c12; 
+            --danger: #e74c3c; 
+            --light: #f4f7f6; 
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--light); margin: 0; padding: 20px; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; background: #fff; padding: 25px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        
+        h1 { text-align: center; color: var(--primary); margin-bottom: 25px; }
+        
+        .top-controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; background: #eee; padding: 10px; border-radius: 8px; }
+        .filter-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .data-tools { display: flex; gap: 10px; }
+        
+        .input-card { background: #eef2f3; padding: 20px; border-radius: 8px; border-left: 5px solid var(--secondary); margin-bottom: 25px; }
+        .input-row { display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; }
+        .form-group { flex: 1; min-width: 200px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 0.9em; }
+        input[type="text"], input[type="date"], input[type="number"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; font-size: 1em; }
+        input[type="file"] { display: none; }
+        
+        button { cursor: pointer; border: none; border-radius: 5px; font-weight: bold; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: white; }
+        button:hover { transform: translateY(-2px); opacity: 0.9; }
+        
+        .btn-save { background: var(--secondary); padding: 11px 25px; font-size: 1em; height: 42px; }
+        .btn-filter { background: #7f8c8d; padding: 10px 15px; }
+        .btn-today { background: var(--success); padding: 10px 15px; }
+        .btn-json-down { background: var(--primary); padding: 10px 15px; }
+        .btn-json-up { background: var(--warning); color: #333; padding: 10px 15px; }
+        .btn-debug { background: #333; padding: 10px 15px; font-size: 0.8em; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; background: #fff; }
+        th, td { border: 1px solid #eee; padding: 12px; text-align: left; vertical-align: top; }
+        th { background: var(--primary); color: white; font-weight: 600; }        tr:nth-child(even) { background: #f9f9f9; }
+        
+        .sub-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px dashed #eee; }
+        .sub-row:last-child { border-bottom: none; }
+        .sub-info { display: flex; align-items: center; gap: 8px; }
+        .sub-actions { display: flex; gap: 5px; }
+        
+        .icon-btn { width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.9em; transition: 0.2s; color: white; }
+        .icon-btn:hover { transform: scale(1.1); }
+        .btn-add { background: var(--success); }
+        .btn-edit { background: var(--warning); color: #333; }
+        .btn-del { background: var(--danger); }
+        .btn-pdf { background: var(--primary); }
+
+        .total-badge { background: var(--primary); color: white; padding: 5px 10px; border-radius: 4px; font-size: 0.9em; font-weight: bold; }
+        .time-text { font-size: 0.8em; color: #7f8c8d; margin-left: 5px; }
+        .today-tag { background: var(--success); color: white; font-size: 0.7em; padding: 2px 6px; border-radius: 10px; margin-left: 5px; vertical-align: middle; }
+        
+        .empty-msg { text-align: center; color: #999; padding: 20px; font-style: italic; }
+        .status-bar { text-align: center; margin-bottom: 15px; font-weight: bold; min-height: 20px; }
+        .msg-success { color: var(--success); }
+        .msg-error { color: var(--danger); }
+        .msg-info { color: var(--secondary); }
+
+        /* Debug Console */
+        #debugConsole {
+            margin-top: 20px;
+            background: #222;
+            color: #0f0;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            height: 200px;
+            overflow-y: scroll;
+            border-radius: 5px;
+            display: none;
+            border: 1px solid #444;
+        }
+        .log-error { color: #ff6b6b; }
+        .log-info { color: #4ecdc4; }
+
+        @media (max-width: 768px) {
+            .top-controls { flex-direction: column; align-items: stretch; }
+            .filter-group, .data-tools { justify-content: space-between; }
+            .input-row { flex-direction: column; }
+            .sub-row { flex-direction: column; align-items: flex-start; gap: 5px; }
+            .sub-actions { width: 100%; justify-content: flex-end; }
+        }
+    </style>
+</head><body>
+
+<div class="container">
+    <h1><i class="fas fa-print"></i> প্রিন্ট মিটার ম্যানেজার</h1>
+    
+    <div id="statusBar" class="status-bar"></div>
+
+    <!-- Top Controls -->
+    <div class="top-controls">
+        <div class="filter-group">
+            <label style="margin:0;">তারিখ:</label>
+            <input type="date" id="filterDate" style="width: auto;" onchange="renderTable()">
+            <button class="btn-today" onclick="setTodayFilter()"><i class="fas fa-calendar-day"></i> আজ</button>
+            <button class="btn-filter" onclick="resetFilter()"><i class="fas fa-list"></i> সব দেখুন</button>
+        </div>
+        <div class="data-tools">
+            <button class="btn-debug" onclick="toggleDebug()"><i class="fas fa-bug"></i> Debug</button>
+            <button class="btn-json-down" onclick="downloadJSON()"><i class="fas fa-file-download"></i> JSON</button>
+            <button class="btn-json-up" onclick="document.getElementById('jsonFileInput').click()"><i class="fas fa-file-upload"></i> আপলোড</button>
+            <input type="file" id="jsonFileInput" accept=".json" onchange="uploadJSON(this)">
+        </div>
+    </div>
+
+    <!-- Input Form -->
+    <div class="input-card">
+        <h3 style="margin-top:0;">নতুন জব তৈরি করুন <span id="todayLabel" class="today-tag" style="display:none;">আজ</span></h3>
+        <div class="input-row">
+            <div class="form-group">
+                <label>মেইন ফাইলের নাম</label>
+                <input type="text" id="mainNameInput" placeholder="যেমন: Brochure Design">
+            </div>
+            <div class="form-group">
+                <label>তারিখ</label>
+                <input type="date" id="jobDateInput">
+            </div>
+            <div style="padding-bottom: 1px;">
+                <button class="btn-save" id="btnCreateJob" onclick="createJob()"><i class="fas fa-plus-circle"></i> তৈরি করুন</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div style="overflow-x: auto;">
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th width="18%">তারিখ ও সময়</th>
+                    <th width="25%">মেইন ফাইল</th>
+                    <th width="42%">সাব ফাইল সমূহ</th>
+                    <th width="15%" style="text-align: center;">অ্যাকশন</th>                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <tr><td colspan="4" class="empty-msg">ডাটা লোড হচ্ছে...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div style="margin-top: 20px; text-align: right; font-size: 1.3em; border-top: 2px solid #333; padding-top: 10px;">
+        মোট: <span id="grandTotal" style="color: var(--success); font-weight: bold;">0.00</span> মিটার
+    </div>
+
+    <!-- Debug Console -->
+    <div id="debugConsole"></div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+<script>
+    // --- CONFIGURATION ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyDfB8qbWgR52MjKniNX7wMi2LK746rov6o",
+        authDomain: "ecommer-e4953.firebaseapp.com",
+        projectId: "ecommer-e4953",
+        storageBucket: "ecommer-e4953.firebasestorage.app",
+        messagingSenderId: "252287127049",
+        appId: "1:252287127049:web:2311c51d7ab30c1c1cb2d8",
+        measurementId: "G-XZYK1TRSME"
+    };
+
+    let allData = [];
+    let isOnline = navigator.onLine;
+    const LOCAL_KEY = "print_meter_data_v2";
+
+    // --- LOGGING & DEBUG ---
+    function log(msg, type = 'info') {
+        const consoleDiv = document.getElementById('debugConsole');
+        const time = new Date().toLocaleTimeString();
+        const colorClass = type === 'error' ? 'log-error' : 'log-info';
+        consoleDiv.innerHTML += `<div class="${colorClass}">[${time}] ${msg}</div>`;
+        consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        console.log(msg);
+    }
+
+    function toggleDebug() {
+        const d = document.getElementById('debugConsole');
+        d.style.display = d.style.display === 'none' ? 'block' : 'none';
+    }
+    function showMsg(txt, type) {
+        const el = document.getElementById('statusBar');
+        el.innerText = txt;
+        el.className = 'status-bar msg-' + type;
+        setTimeout(() => { el.innerText = ''; el.className = 'status-bar'; }, 4000);
+    }
+
+    // --- HELPERS ---
+    const getTodayStr = () => {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    };
+    const formatNum = (n) => parseFloat(n || 0).toFixed(2);
+    const formatDateBD = (str) => str ? str.split('-').reverse().join('/') : '';
+    const formatTime = (str) => {
+        if(!str) return '';
+        let [h, m] = str.split(':');
+        h = parseInt(h);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12 || 12;
+        return `${h}:${m} ${ampm}`;
+    };
+
+    // --- DATA HANDLING ---
+    function loadLocalData() {
+        try {
+            const stored = localStorage.getItem(LOCAL_KEY);
+            if (stored) {
+                allData = JSON.parse(stored);
+                log(`লোকাল থেকে ${allData.length}টি ডাটা লোড হয়েছে।`, 'info');
+                sortData();
+                renderTable();
+                return true;
+            }
+        } catch (e) {
+            log("লোকাল ডাটা পড়তে সমস্যা: " + e.message, 'error');
+        }
+        allData = [];
+        renderTable();
+        return false;
+    }
+
+    function saveToLocal() {
+        localStorage.setItem(LOCAL_KEY, JSON.stringify(allData));
+        log("ডাটা লোকালি সেভ হয়েছে।", 'info');
+        renderTable();
+    }
+
+    function sortData() {        allData.sort((a, b) => {
+            const dateA = new Date(a.date + 'T' + (a.time || '00:00'));
+            const dateB = new Date(b.date + 'T' + (b.time || '00:00'));
+            return dateB - dateA;
+        });
+    }
+
+    async function loadDataFromFirebase() {
+        if (!isOnline) {
+            log("অফলাইন মোড। শুধু লোকাল ডাটা দেখানো হচ্ছে।", 'info');
+            loadLocalData();
+            return;
+        }
+
+        log("Firebase থেকে ডাটা লোড শুরু...", 'info');
+        document.getElementById('tableBody').innerHTML = '<tr><td colspan="4" class="empty-msg">ডাটা লোড হচ্ছে...</td></tr>';
+
+        try {
+            const snapshot = await db.collection(COLLECTION).get();
+            allData = [];
+            if (snapshot.empty) {
+                log("Firebase-এ কোনো ডাটা নেই।", 'info');
+            } else {
+                snapshot.forEach(doc => {
+                    allData.push({ id: doc.id, ...doc.data() });
+                });
+                log(`Firebase থেকে ${allData.length}টি ডাটা লোড হয়েছে।`, 'success');
+            }
+            saveToLocal(); // Backup
+            sortData();
+            renderTable();
+        } catch (error) {
+            log("Firebase লোড এরর: " + error.code + " - " + error.message, 'error');
+            showMsg("ডাটা লোড ব্যর্থ! Debug বাটনে ক্লিক করুন বিস্তারিত দেখতে।", "error");
+            
+            // Fallback to local data immediately on error
+            log("ফিরে যাওয়া লোকাল ডাটায়...", 'info');
+            loadLocalData();
+        }
+    }
+
+    async function syncToFirebase() {
+        if (!isOnline) return;
+        log("সিঙ্ক শুরু...", 'info');
+        try {
+            const snapshot = await db.collection(COLLECTION).get();
+            const remoteIds = new Set(snapshot.docs.map(d => d.id));
+
+            for (const item of allData) {
+                if (!remoteIds.has(item.id)) {                    await db.collection(COLLECTION).doc(item.id).set(item);
+                    log(`আপলোড হয়েছে: ${item.mainName}`, 'success');
+                }
+            }
+            // Refresh after sync
+            loadDataFromFirebase();
+        } catch (e) {
+            log("সিঙ্ক এরর: " + e.message, 'error');
+        }
+    }
+
+    // --- INITIALIZATION ---
+    window.onload = () => {
+        document.getElementById('jobDateInput').value = getTodayStr();
+        document.getElementById('filterDate').value = getTodayStr();
+        document.getElementById('todayLabel').style.display = 'inline-block';
+        
+        // Initialize Firebase
+        if (!firebase.apps.length) {
+            try {
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                log("Firebase ইনিশিয়ালাইজড।", 'success');
+            } catch (e) {
+                log("Firebase ইনিশিয়ালিজেশন এরর: " + e.message, 'error');
+            }
+        } else {
+            db = firebase.firestore();
+        }
+
+        // Load Data
+        loadLocalData(); // Show local first (instant)
+        if (isOnline) {
+            setTimeout(loadDataFromFirebase, 500); // Then fetch cloud
+        }
+    };
+
+    window.addEventListener('online', () => {
+        isOnline = true;
+        showMsg("ইন্টারনেট ফিরে এসেছে! সিঙ্ক হচ্ছে...", "success");
+        syncToFirebase();
+    });
+    window.addEventListener('offline', () => {
+        isOnline = false;
+        showMsg("অফলাইন মোডে আছেন।", "error");
+    });
+
+    // --- CORE FUNCTIONS ---
+    function createJob() {
+        const name = document.getElementById('mainNameInput').value.trim();        const date = document.getElementById('jobDateInput').value;
+        if (!name || !date) { alert("নাম ও তারিখ দিন"); return; }
+
+        const newId = 'job_' + Date.now();
+        const newJob = {
+            id: newId,
+            mainName: name,
+            date: date,
+            time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+            subFiles: [],
+            totalMeter: 0
+        };
+
+        allData.unshift(newJob);
+        saveToLocal();
+        document.getElementById('mainNameInput').value = '';
+        showMsg("জব তৈরি হয়েছে!", "success");
+
+        if (isOnline) {
+            db.collection(COLLECTION).doc(newId).set(newJob).catch(e => log("সেভ এরর: "+e.message, 'error'));
+        }
+    }
+
+    function addSubFile(jobId) {
+        const job = allData.find(j => j.id === jobId);
+        if (!job) return;
+        const sName = prompt("সাব ফাইলের নাম:");
+        if (!sName) return;
+        const sMeter = parseFloat(prompt("মিটার:"));
+        if (isNaN(sMeter)) { alert("ভুল সংখ্যা"); return; }
+
+        job.subFiles.push({ id: Date.now(), name: sName, meter: sMeter });
+        job.totalMeter = parseFloat((job.totalMeter + sMeter).toFixed(2));
+        saveToLocal();
+        
+        if (isOnline) {
+            db.collection(COLLECTION).doc(jobId).update({
+                subFiles: job.subFiles,
+                totalMeter: job.totalMeter
+            }).catch(e => log("আপডেট এরর: "+e.message, 'error'));
+        }
+    }
+
+    function editSubFile(jobId, subId) {
+        const job = allData.find(j => j.id === jobId);
+        const sub = job?.subFiles.find(s => s.id === subId);
+        if (!sub) return;
+        const newName = prompt("নতুন নাম:", sub.name);
+        if (newName === null) return;
+        const newMeter = parseFloat(prompt("নতুন মিটার:", sub.meter));        if (isNaN(newMeter)) return;
+
+        const diff = newMeter - sub.meter;
+        sub.name = newName;
+        sub.meter = newMeter;
+        job.totalMeter = parseFloat((job.totalMeter + diff).toFixed(2));
+        saveToLocal();
+
+        if (isOnline) {
+            db.collection(COLLECTION).doc(jobId).update({
+                subFiles: job.subFiles,
+                totalMeter: job.totalMeter
+            }).catch(e => log("আপডেট এরর: "+e.message, 'error'));
+        }
+    }
+
+    function deleteSubFile(jobId, subId) {
+        if (!confirm("মুছতে চান?")) return;
+        const jobIdx = allData.findIndex(j => j.id === jobId);
+        if (jobIdx === -1) return;
+        const job = allData[jobIdx];
+        const subIdx = job.subFiles.findIndex(s => s.id === subId);
+        if (subIdx === -1) return;
+
+        const removed = job.subFiles[subIdx].meter;
+        job.subFiles.splice(subIdx, 1);
+        job.totalMeter = parseFloat((job.totalMeter - removed).toFixed(2));
+
+        if (job.subFiles.length === 0 && confirm("পুরো জবটি মুছবেন?")) {
+            allData.splice(jobIdx, 1);
+            if (isOnline) db.collection(COLLECTION).doc(jobId).delete();
+        } else {
+            if (isOnline) db.collection(COLLECTION).doc(jobId).update({
+                subFiles: job.subFiles,
+                totalMeter: job.totalMeter
+            });
+        }
+        saveToLocal();
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('tableBody');
+        const filter = document.getElementById('filterDate').value;
+        tbody.innerHTML = '';
+        let grand = 0;
+
+        const list = filter ? allData.filter(i => i.date === filter) : allData;
+
+        if (list.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="empty-msg">${filter ? 'এই তারিখে ডাটা নেই' : 'কোনো ডাটা নেই'}</td></tr>`;            document.getElementById('grandTotal').innerText = "0.00";
+            return;
+        }
+
+        list.forEach(job => {
+            grand += parseFloat(job.totalMeter || 0);
+            let subs = '';
+            if (job.subFiles && job.subFiles.length) {
+                job.subFiles.forEach(s => {
+                    subs += `<div class="sub-row">
+                        <div class="sub-info"><i class="fas fa-file-alt" style="color:#aaa"></i> ${s.name} <strong>(${formatNum(s.meter)}m)</strong></div>
+                        <div class="sub-actions">
+                            <button class="icon-btn btn-edit" onclick="editSubFile('${job.id}', ${s.id})"><i class="fas fa-pen"></i></button>
+                            <button class="icon-btn btn-del" onclick="deleteSubFile('${job.id}', ${s.id})"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </div>`;
+                });
+            } else {
+                subs = '<small style="color:#999">কোনো সাব ফাইল নেই। (+) চাপুন।</small>';
+            }
+
+            const isToday = job.date === getTodayStr();
+            const row = `<tr>
+                <td>
+                    <strong style="color:${isToday?'var(--success)':'inherit'}">${formatDateBD(job.date)}</strong>${isToday?' <span class="today-tag">আজ</span>':''}<br>
+                    <small class="time-text">${formatTime(job.time)}</small>
+                </td>
+                <td><strong>${job.mainName}</strong></td>
+                <td>${subs}</td>
+                <td style="text-align:center">
+                    <div style="margin-bottom:5px"><span class="total-badge">${formatNum(job.totalMeter)}m</span></div>
+                    <div style="display:flex; justify-content:center; gap:5px">
+                        <button class="icon-btn btn-add" onclick="addSubFile('${job.id}')"><i class="fas fa-plus"></i></button>
+                        <button class="icon-btn btn-pdf" onclick="downloadPDF('${job.id}')"><i class="fas fa-file-pdf"></i></button>
+                    </div>
+                </td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+        document.getElementById('grandTotal').innerText = formatNum(grand);
+        document.getElementById('todayLabel').style.display = (filter === getTodayStr()) ? 'inline-block' : 'none';
+    }
+
+    function setTodayFilter() {
+        document.getElementById('filterDate').value = getTodayStr();
+        renderTable();
+    }
+    function resetFilter() {
+        document.getElementById('filterDate').value = '';
+        renderTable();    }
+
+    // JSON & PDF (Same as before)
+    function downloadJSON() {
+        const blob = new Blob([JSON.stringify(allData, null, 2)], {type: "application/json"});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `Backup_${getTodayStr()}.json`;
+        a.click();
+    }
+    function uploadJSON(input) {
+        const file = input.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if(Array.isArray(data)) {
+                    allData = data;
+                    saveToLocal();
+                    alert("ডাটা ইম্পোর্ট সফল!");
+                    if(isOnline) syncToFirebase();
+                }
+            } catch(err) { alert("ভুল ফাইল!"); }
+        };
+        reader.readAsText(file);
+    }
+    async function downloadPDF(jobId) {
+        const job = allData.find(j => j.id === jobId);
+        if(!job) return;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        doc.text(`Report: ${job.mainName}`, 10, 10);
+        doc.text(`Date: ${formatDateBD(job.date)} | Total: ${formatNum(job.totalMeter)}m`, 10, 20);
+        const rows = job.subFiles.map((s,i) => [i+1, s.name, `${formatNum(s.meter)}m`]);
+        doc.autoTable({ head: [['SL','Name','Meter']], body: rows, startY: 30 });
+        doc.save(`${job.mainName}.pdf`);
+    }
+
+    // Global DB variable fix
+    let db; 
+    const COLLECTION = "print_jobs";
+
+</script>
+</body>
+</html>
